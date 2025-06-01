@@ -1,0 +1,199 @@
+---
+title: "Lab4 Guiu Carol"
+output: 
+  flexdashboard::flex_dashboard:
+    source_code: embed 
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+library(datasets)
+library(plotly)
+library(readr)
+library(dplyr)
+library(DT)
+library(tidyr)
+library(dplyr)
+library(countrycode)
+
+
+data(WorldPhones)
+data2 <- read_csv("countries of the world.csv")
+
+```
+
+# World phones during the 50s
+
+### Bar graph of the world phones during the 50s
+
+```{r, include=FALSE}
+# UI function
+worldPhonesUI <- function(id) {
+  ns <- NS(id)
+  fillCol(height = 600, flex = c(NA, 1), 
+    inputPanel(
+      selectInput(ns("region"), "Region:", choices = colnames(WorldPhones))
+    ),
+    plotlyOutput(ns("phonePlot"), height = "100%"),  # use plotlyOutput
+    verbatimTextOutput(ns("clickInfo"))              # display click info
+  )
+}
+
+# Server function
+worldPhones <- function(input, output, session, ...) {
+  output$phonePlot <- renderPlotly({
+    data <- WorldPhones[, input$region] * 1000
+    years <- as.numeric(rownames(WorldPhones))
+    
+    plot_ly(
+      x = years,
+      y = data,
+      type = "bar",
+      source = "plotClick",
+      marker = list(color = rainbow(length(data))),
+      text = paste("Year:", years, "<br>Phones:", data),
+      hoverinfo = "text"
+    )
+  })
+
+  #help
+  output$clickInfo <- renderPrint({
+    click <- event_data("plotly_click", source = "plotClick")
+    if (is.null(click)) {
+      "Click a bar to see the number of telephones."
+    } else {
+      paste("Year:", click$x, "- Telephones:", click$y)
+    }
+  })
+}
+
+
+
+```
+
+```{r}
+# Include the module
+worldPhonesUI("phones")
+callModule(worldPhones, "phones", col = rainbow(20))
+
+```
+
+## Table of contents {data-width="600"}
+
+```{r}
+
+# Convert WorldPhones matrix to data frame
+df <- as.data.frame(WorldPhones)
+
+# Add Year as a column (it was like a row in the .csv)
+df$Year <- as.numeric(rownames(WorldPhones))
+
+# Reshape to long format: Year | Continent | Phones
+df_long <- df %>%
+  pivot_longer(
+    names_to = "Continent",
+      cols = -Year,
+    values_to = "Phones"
+  ) %>%
+  mutate(Phones = Phones * 1000)
+
+
+# Reorder columns: Continent-Year-Phones
+df_long <- df_long[, c("Continent", "Year", "Phones")]
+
+# Display the table
+datatable(
+    df_long,
+    options = list(
+    pageLength = 7,
+    scrollX = TRUE,
+    scrollY = "550px", #if not it was shown badly
+    lengthChange = FALSE,
+    paging = TRUE
+  ),
+  rownames = FALSE
+)
+
+
+```
+
+# World phones 2018
+
+### Phones shown in a map
+
+```{r map-plot}
+
+data2 <- data2 %>%
+  mutate(
+    PhonesPer1000 = as.numeric(gsub(",", ".", `PhonesPer1000`)),
+    Country = trimws(Country)  # Trim whitespace in country names
+  )
+
+# Standardize country names (It wasn't all good in th .csv)
+data2$CountryStandard <- countrycode(data2$Country, origin = 'country.name', destination = 'country.name')
+
+
+# Then plot with:
+plot_ly(
+  data = data2,
+  type = 'choropleth',
+  locations = ~CountryStandard,
+  locationmode = 'country names',
+  z = ~`PhonesPer1000`,
+  colorscale = 'Blues',
+  text = ~paste(
+    "Country:", Country,
+    "<br>Population:", Population,
+    "<br>Phones per 1,000:", `PhonesPer1000`
+  ),
+  hoverinfo = "text"
+) %>%
+  layout(
+    title = "Number of phones per 1000 inhabitants by Country",
+    geo = list(
+      showframe = FALSE,
+      showcoastlines = FALSE,
+      projection = list(type = 'equirectangular')
+    )
+  )
+
+
+```
+
+# About
+
+### Context of my data visualization
+
+As we all know, the first telephone patent was granted to Alexander Graham Bell in 1876, but the phone was a much more simpler object than the one we know today.
+
+It wasn't until 1927, that for example it was made the first transatlantic call (between USA and UK), it is also true that there were yet a lot of phones in that time.
+
+Being that said, this project is about the evolution of the phone structured with two datasets found on the internet that I found it very interesting.
+
+Between 1951 and 1961, global telephone usage expanded steadily, with significant variation between continents:
+
+**North America** consistently led in telephone penetration. The number of telephones rose from 46 million in 1951 to 79 million in 1961, reflecting its status as the most industrialized and urbanized region at the time.
+
+**Europe** saw substantial growth, from 21 million phones in 1951 to 43 million in 1961. Post-war economic recovery and modernization efforts fueled this expansion.
+
+**Asia** experienced modest growth, increasing from 28 to 90 million phones. They made a huge boom, also it is the bigger continent.
+
+**Oceania** grew from 16 to 32 million telephones. Despite being sparsely populated, its high-income status supported steady telephone adoption.
+
+**Africa** started with just 0.9 million phones in 1951 and reached 20 million by 1961. Probably the colonial influence made the statistics grow, because Africa was very poor.
+
+**South America** rose from 18 to 33 million phones over the decade, reflecting gradual industrialization and urbanization.
+
+
+The second page displays another dataset that I found particularly interesting for this topic, as it allows us to compare both sources and observe growth over time.
+
+In this case, I chose to represent the data as a map, since the dataset was much larger and covered more geographic detail. In this second one, I show the number of phones per 1,000 inhabitants, unlike the first graph, which showed only the raw number of phones.
+
+The interactive map allows you to slide over each country (not all the countries in the world were in the dataset -> blank spaces) to view detailed information, including the country name, population, and the number of phones per 1,000 inhabitants. Also it's colored as it is easyer to point at the most industrialized countries with the most number of phones.
+
+```{r}
+tagList(
+  img(src = "phone.png", height = "100px")
+)
+
+```
